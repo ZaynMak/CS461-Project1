@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <title>project 1</title>
+
+  <!-- latest compiled and minified CSS -->
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+
+  <!-- jQuery library -->
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+
+  <!-- latest compiled JavaScript -->
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
+
+  <!-- load gl-matrix: all functions and modules will be available in the mat2, mat3, mat4, vec2, vec3, vec4 namespaces -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
+
+  <!-- load MathJax for typesetting equations in LaTeX -->
+  <script>
+  MathJax = {
+    tex: {inlineMath: [['$', '$'], ['\\(', '\\)']]}
+  };
+  </script>
+  <script id="MathJax-script" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+
+  <!-- load the javascript file -->
+  <script src="project1.js"></script>
+
+</head>
+
+<body>
+
+  <!-- wrapper -->
+  <div class="d-flex" id="wrapper">
+
+    <!-- page content -->
+    <div id="page-content-wrapper">
+
+      <!-- navigation bar -->
+      <nav class="navbar" style="background-color: #e3f2fd;">
+          <a class="navbar-brand" href="https://philipclaude.gitlab.io/cs461f21/index.html">
+          Middlebury College CSCI 461 - Computer Graphics</a>
+      </nav> <!-- navigation bar -->
+
+      <div class="container-fluid">
+        <h4>project 1 report</h4>
+        name: <i>Zayn Makdessi</i>
+
+        <br><br>
+        <center>
+          <select id='mesh-dropdown' onchange='plotter.load();plotter.draw()'>
+            <option value='square'>square</option>
+            <option value='sphere'>sphere</option>
+          </select>
+          <input type='checkbox' id='animate-checkbox' onchange='render();'>animate</input>
+          <input type='checkbox' onchange='plotter.quads = !plotter.quads; plotter.draw();'>quads</input>
+          <input type='checkbox' checked=true onchange='plotter.cull = !plotter.cull; plotter.draw();'>cull</input>
+          <input type='checkbox' onchange='plotter.numbers = !plotter.numbers; plotter.draw();'>numbers</input>
+          <br>
+          <canvas style='border: 2px solid black;' width=800 height=500 id='canvas-mesh'>
+          </canvas>
+        </center>
+
+        <h4>questions</h4>
+        Please respond to the following questions:
+        <ol>
+          <li>
+            Please describe any matrices involved in your drawing algorithm.
+            <p>
+              <i>I used the multiplication of the viewport matrix, the perspective matrix, the view matrix, and the model matrix as the matrix to multiply all my vertices by to get the coordinates on the canvas (the matrix is called multMatrix in my code).</i>
+            </p>
+          </li>
+          <li>
+            Please describe any matrices involved in your "back-face culling" algorithm.
+            <p>
+              <i>I use the normtransfMatrix, which is the inverse transpose of the model-view matrix to transform the normals into the frame of reference of the camera.</i>
+            </p>
+          </li>
+          <li>
+            Will the algorithm proposed in the project description for culling faces that pointed away from the camera (eye) <b>always</b> work for <b>general</b> $3d$ meshes?
+            Why or why not?
+            Hint: think about the types of meshes we are drawing in this assignment (i.e. a mesh of a sphere).
+          </li>
+          <p>
+            <i>I think it should work in most cases as long as the object does not have a hole facing the camera, because if there was a hole, then we should see the back of the faces pointing outward behind the object, so I feel like we should draw them in those cases.</i>
+          </p>
+
+          <li>
+            Please do some research on ways of robustly determining which faces are in front of other faces that works for general $3d$ meshes.
+            Hint: investigate some data structures discussed in Chapter 12 of Marschner & Shirley's <i>Fundamentals of Computer Graphics</i> (4th Edition).
+          </li>
+          <p>
+            <i>BSP trees can be used to determine which faces are in front of other faces. It uses a similar method to the Painter's Algorithm where it starts by drawing by things from the back to the front based on the current viewpoint.</i>
+          </p>
+
+        </ol>
+
+      </div> <!-- container-fluid -->
+    </div> <!-- page-content-wrapper -->
+  </div> <!-- wrapper -->
+</body>
+
+<script>
+
+  function getSphereMesh( radius , nt , np ) {
+
+    // produces a sphere tessellation with nt divisions in theta and np divisions in phi
+    // both triangles and quads are returned, as well as vertex normals and parameter coordinates (normalized theta, phi)
+    const du = 1.0/np, dp = 1.0*Math.PI*du;
+    const dv = 1.0/nt, dt = 2.0*Math.PI*dv;
+
+    let vertices = [];
+    let params = [];
+    let normals = [];
+    for (let j = 0; j < nt+1; j++) {
+      for (let i = 0; i < np+1; i++) {
+
+        let u = i*du;
+        let v = j*dv;
+
+        let phi   = i*dp;
+        let theta = j*dt;
+
+        const x = radius*Math.sin(phi)*Math.cos(theta);
+        const y = radius*Math.sin(phi)*Math.sin(theta);
+        const z = radius*Math.cos(phi);
+
+        vertices.push(x,y,z);
+        params.push(v,u);
+        normals.push(x/radius,y/radius,z/radius);
+      }
+    }
+
+    triangles = [];
+    for (let j = 0; j < nt; j++) {
+      for (let i = 0; i < np; i++) {
+
+        // determine the four vertices defining the rectangle
+        let i0 = j*(np+1) + i;
+        let i1 = i0 + 1;
+        let i2 = i0 + (np+1);
+        let i3 = i2 + 1;
+
+        triangles.push(i0,i1,i3); // first triangle indices
+        triangles.push(i0,i3,i2); // second triangle indices
+      }
+    }
+
+    // return a JSON description of the sphere mesh
+    return {'dim':3,'vertices':vertices,'triangles':triangles,'params':params,'normals':normals};
+  }
+
+  // create an instance of the Plotter
+  let plotter = new Plotter();
+
+  // set some default parameters
+  plotter.quads = false;
+  plotter.numbers = false;
+  plotter.cull = true;
+
+  // load the appropriate mesh
+  plotter.load();
+
+  // initial draw
+  plotter.draw();
+
+  // initial angle of rotation (about y-axis)
+  let theta = Math.PI/36;
+	let count = 0;
+  let render = function() {
+
+    // modify the model matrix here
+		plotter.model_matrix[0] = Math.cos(theta * count);
+  	plotter.model_matrix[2] = -Math.sin(theta * count);
+    plotter.model_matrix[8] = Math.sin(theta * count);
+    plotter.model_matrix[10] = Math.cos(theta * count);
+
+    // redraw
+    plotter.draw();
+
+    let animate = document.getElementById('animate-checkbox').checked;
+    if (animate)
+			count++
+      requestAnimationFrame(render); // keep calling the render function if animation is requested
+  }
+</script>
+
+</html>
